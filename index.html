@@ -437,15 +437,25 @@ const SESSION_ID = (function(){
   return id;
 })();
 { const d = document.getElementById('session-id-display'); if(d) d.textContent = '내 ID: ' + SESSION_ID; }
-const ACTIVITY_FIELD_MAP = {
-  '1': ['missing1','missing2','missing3','reflection'],
-  '2': ['observation','interpretation','verification'],
-  '3': ['context','qualifier','environment','basis','needed']
+const SYNC_FIELD_MAP = {
+  activity: {
+    '1': ['missing1','missing2','missing3','reflection'],
+    '2': ['observation','interpretation','verification'],
+    '3': ['context','qualifier','environment','basis','needed']
+  },
+  reflection: {
+    terms: ['original','component','rewrite'],
+    performance: ['task','performance','capacity','gap_action'],
+    format: ['current_items','missing_items','change'],
+    icfnote: ['bodyFunction','bodyStructure','activityParticipation','environment','personal'],
+    peo: ['person','environment','occupation','link'],
+    prompt: ['required_rule','privacy_rule','prompt_rule']
+  }
 };
-function syncActivityToSheet(entry){
-  if(!entry || entry.type!=='activity') return;
+function syncEntryToSheet(entry){
+  if(!entry) return;
   if(!GAS_URL || GAS_URL.indexOf('TODO')===0) return; // 배포 URL 설정 전에는 전송하지 않음
-  const fieldNames = ACTIVITY_FIELD_MAP[entry.id];
+  const fieldNames = (SYNC_FIELD_MAP[entry.type]||{})[entry.id];
   if(!fieldNames) return;
   const fields = {};
   fieldNames.forEach(name=>{ fields[name] = stored(entry, name); });
@@ -453,10 +463,21 @@ function syncActivityToSheet(entry){
     method: 'POST',
     mode: 'no-cors',
     headers: {'Content-Type':'text/plain;charset=utf-8'},
-    body: JSON.stringify({ activity: entry.id, sessionId: SESSION_ID, fields })
+    body: JSON.stringify({ type: entry.type, id: entry.id, sessionId: SESSION_ID, fields })
   }).catch(()=>{ /* 참가자 경험에 영향 없도록 실패는 조용히 무시 */ });
 }
-function closeDrawer(){syncActivityToSheet(activeEntry);document.body.classList.remove('activity-open');activeEntry=null}
+function syncFinalToSheet(){
+  if(!GAS_URL || GAS_URL.indexOf('TODO')===0) return;
+  const changes = document.getElementById('final-changes')?.value || '';
+  const record = document.getElementById('final-record')?.value || '';
+  fetch(GAS_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: {'Content-Type':'text/plain;charset=utf-8'},
+    body: JSON.stringify({ type: 'final', sessionId: SESSION_ID, fields: { changes, record } })
+  }).catch(()=>{});
+}
+function closeDrawer(){syncEntryToSheet(activeEntry);document.body.classList.remove('activity-open');activeEntry=null}
 function bindEntryFields(entry){drawerBody.querySelectorAll('input,textarea,select').forEach(el=>{const saved=stored(entry,el.name);if(saved){if(el.type==='radio')el.checked=el.value===saved;else el.value=saved}const save=()=>{if(el.type==='radio'&&!el.checked)return;localStorage.setItem(entryKey(entry,el.name),el.value);document.getElementById('save-state').textContent='방금 이 브라우저에 임시 저장했습니다.';renderResults()};el.addEventListener('input',save);el.addEventListener('change',save)})}
 function renderActivity(id){const meta=activityMeta[id];document.getElementById('drawer-title').textContent=meta.title;document.getElementById('drawer-desc').textContent=meta.desc;drawerBody.replaceChildren(document.getElementById(`activity-${id}-template`).content.cloneNode(true));bindEntryFields({type:'activity',id})}
 function renderReflection(id){const meta=reflectionMeta[id];document.getElementById('drawer-title').textContent=meta.title;document.getElementById('drawer-desc').textContent=meta.desc;const frag=document.createDocumentFragment();meta.fields.forEach((field,index)=>{const wrap=document.createElement('div');wrap.className='form-group';const label=document.createElement('label');const inputId=`r-${id}-${index}`;label.htmlFor=inputId;label.textContent=field.label;wrap.appendChild(label);let el;if(field.type==='select'){el=document.createElement('select');field.options.forEach((option,i)=>{const o=document.createElement('option');o.value=i?option:'';o.textContent=option;el.appendChild(o)})}else if(field.type==='text'){el=document.createElement('input');el.type='text'}else{el=document.createElement('textarea');el.rows=4}el.id=inputId;el.name=field.name;if(field.placeholder)el.placeholder=field.placeholder;wrap.appendChild(el);frag.appendChild(wrap)});drawerBody.replaceChildren(frag);bindEntryFields({type:'reflection',id})}
@@ -478,9 +499,9 @@ function renderFinalFeedback(completed){const list=document.getElementById('fina
 function composeFinalText(){const rows=['ICF 작업치료 워크숍 · 참여 결과'];resultEntries.forEach(entry=>{const meta=entryMeta(entry);rows.push(`\n[${meta.title}]`);if(entry.type==='reflection'){meta.fields.forEach(field=>rows.push(`${field.label}: ${stored(entry,field.name)||'(미입력)'}`))}else rows.push(`요약: ${resultPreview(entry)}`)});rows.push('\n[피드백을 반영해 바꾼 점]',localStorage.getItem('icf-ot-workshop:final-changes')||'(미입력)','\n[최종 수정 사례기록]',localStorage.getItem('icf-ot-workshop:final-record')||'(미입력)');return rows.join('\n')}
 const finalChanges=document.getElementById('final-changes');const finalRecord=document.getElementById('final-record');finalChanges.value=localStorage.getItem('icf-ot-workshop:final-changes')||'';finalRecord.value=localStorage.getItem('icf-ot-workshop:final-record')||'';[[finalChanges,'icf-ot-workshop:final-changes'],[finalRecord,'icf-ot-workshop:final-record']].forEach(([el,key])=>el.addEventListener('input',()=>{localStorage.setItem(key,el.value);document.getElementById('final-save-state').textContent='방금 이 브라우저에 임시 저장했습니다.';renderResults()}));
 document.getElementById('refresh-results').onclick=renderResults;
-document.getElementById('copy-final').onclick=async()=>{try{await copyText(composeFinalText());document.getElementById('final-save-state').textContent='전체 결과를 클립보드에 복사했습니다.'}catch{document.getElementById('final-save-state').textContent='복사하지 못했습니다. 브라우저 권한을 확인하세요.'}};
+document.getElementById('copy-final').onclick=async()=>{try{await copyText(composeFinalText());document.getElementById('final-save-state').textContent='전체 결과를 클립보드에 복사했습니다.'}catch{document.getElementById('final-save-state').textContent='복사하지 못했습니다. 브라우저 권한을 확인하세요.'}syncFinalToSheet();};
 document.getElementById('copy-md-format').onclick=async()=>{const btn=document.getElementById('copy-md-format');try{await copyText(document.getElementById('md-format-content').textContent);btn.textContent='복사됨 ✓'}catch{btn.textContent='복사 실패 — 직접 드래그해 복사하세요'}};
-document.getElementById('download-final').onclick=()=>{const blob=new Blob([composeFinalText()],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='ICF-작업치료-워크숍-최종결과.txt';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);document.getElementById('final-save-state').textContent='텍스트 파일로 저장했습니다.'};
+document.getElementById('download-final').onclick=()=>{const blob=new Blob([composeFinalText()],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='ICF-작업치료-워크숍-최종결과.txt';document.body.appendChild(a);a.click();a.remove();URL.revokeObjectURL(url);document.getElementById('final-save-state').textContent='텍스트 파일로 저장했습니다.';syncFinalToSheet();};
 renderResults();
 </script>
 </body>
