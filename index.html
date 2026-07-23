@@ -425,7 +425,7 @@ function entryMeta(entry){return entry.type==='activity'?activityMeta[entry.id]:
 function stored(entry,name){return localStorage.getItem(entryKey(entry,name))||''}
 function openActivity(id,opts){const auto=opts&&opts.auto;if(!activityMeta[id])return closeDrawer();if(auto&&dismissedIds.has('a'+id))return;if(activeEntry&&activeEntry.type==='activity'&&activeEntry.id===id){document.body.classList.add('activity-open');return}activeEntry={type:'activity',id};renderActivity(id);document.body.classList.add('activity-open')}
 function openReflection(id){if(!reflectionMeta[id])return closeDrawer();if(activeEntry&&activeEntry.type==='reflection'&&activeEntry.id===id){document.body.classList.add('activity-open');return}activeEntry={type:'reflection',id};renderReflection(id);document.body.classList.add('activity-open')}
-const GAS_URL = 'TODO: 배포된 GAS 웹앱 URL을 여기 붙여넣으세요';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbxJI0Cb8WyKdfFBz0uqZux6rXzQFmfS6Pu3woX_XAdPhNHYle19NLdgzmZJeoWjLF58PQ/exec';
 const SESSION_ID = (function(){
   const key = 'icf-ot-workshop:session-id';
   let id = localStorage.getItem(key);
